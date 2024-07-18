@@ -99,7 +99,7 @@ jobs:
       - name: Get current date
         id: date
         run: |
-          echo "{date}={$(date +'%Y-%m-%d')}" >> $GITHUB_STATE
+          echo "{date}={$(date +'%Y-%m-%d')}" >> $GITHUB_ENV
 
       - name: Upload artifact to BOX
         working-directory: android
