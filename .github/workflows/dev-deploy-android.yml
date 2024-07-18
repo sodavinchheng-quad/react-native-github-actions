@@ -1,6 +1,7 @@
 name: Deploy android for dev
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - dev-release
@@ -101,6 +102,6 @@ jobs:
         run: |
           curl --location 'https://upload.app.box.com/api/2.0/files/content' \
                --header 'Authorization: Bearer ${{ secrets.BOX_ACCESS_TOKEN }}' \
-               --form 'attributes="{\"name\":\"app-release.apk\", \"parent\":{\"id\":\"${{ secrets.BOX_IOS_DIRECTORY_ID }}\"}}"' \
+               --form 'attributes="{\"name\":\"app-release.apk\", \"parent\":{\"id\":\"${{ secrets.BOX_ANDROID_DIRECTORY_ID }}\"}}"' \
                --form 'file=@"app/build/outputs/apk/release/app-release.apk"'
 
