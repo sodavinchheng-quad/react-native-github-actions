@@ -95,11 +95,17 @@ jobs:
         working-directory: android
         run: |
           ./gradlew assembleRelease --no-daemon
+
+      - name: Get current date
+        id: date
+        run: |
+          echo "{date}={$(date +'%Y-%m-%d')}" >> $GITHUB_STATE
+
       - name: Upload artifact to BOX
         working-directory: android
         run: |
           curl --location 'https://upload.app.box.com/api/2.0/files/content' \
                --header 'Authorization: Bearer ${{ secrets.BOX_ACCESS_TOKEN }}' \
-               --form 'attributes="{\"name\":\"app-release.apk\", \"parent\":{\"id\":\"${{ secrets.BOX_ANDROID_DIRECTORY_ID }}\"}}"' \
+               --form 'attributes="{\"name\":\"${{ env.date }}_app-release.apk\", \"parent\":{\"id\":\"${{ secrets.BOX_ANDROID_DIRECTORY_ID }}\"}}"' \
                --form 'file=@"app/build/outputs/apk/release/app-release.apk"'
 

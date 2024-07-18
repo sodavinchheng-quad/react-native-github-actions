@@ -70,21 +70,27 @@ jobs:
       - name: Build Artifact
         uses: yukiarrr/ios-build-action@v1.4.0
         with:
-          project-path: ios/test.xcodeproj
+          project-path: ios/githubactionstest.xcodeproj
           p12-base64: ${{ secrets.DEV_IOS_P12_BASE64 }}
           mobileprovision-base64: ${{ secrets.DEV_IOS_MOBILE_PROVISION_BASE64 }}
           code-signing-identity: 'Apple Distribution'
           team-id: ${{ secrets.DEV_IOS_TEAM_ID }}
           certificate-password: ${{ secrets.DEV_IOS_CERTIFICATE_PASSWORD }}
-          workspace-path: ios/test.xcworkspace
-          scheme: test-Dev
+          workspace-path: ios/githubactionstest.xcworkspace
+          scheme: githubactionstest-Dev
           export-method: "ad-hoc"
-          output-path: "ios/test.ipa"
+          output-path: "ios/githubactionstest.ipa"
           update-targets: |
-            test-Dev
+            githubactionstest-Dev
+
+      - name: Get current date
+        id: date
+        run: |
+          echo "{date}={$(date +'%Y-%m-%d')}" >> $GITHUB_STATE
+
       - name: Upload artifact to BOX
         run: |
           curl --location 'https://upload.app.box.com/api/2.0/files/content' \
                --header 'Authorization: Bearer ${{ secrets.BOX_ACCESS_TOKEN }}' \
-               --form 'attributes="{\"name\":\"test.ipa\", \"parent\":{\"id\":\"${{ secrets.BOX_IOS_DIRECTORY_ID }}\"}}"' \
-               --form 'file=@"ios/test.ipa"'
+               --form 'attributes="{\"name\":\"${{ env.date }}_githubactionstest.ipa\", \"parent\":{\"id\":\"${{ secrets.BOX_IOS_DIRECTORY_ID }}\"}}"' \
+               --form 'file=@"ios/githubactionstest.ipa"'
