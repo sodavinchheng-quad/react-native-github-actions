@@ -1,0 +1,106 @@
+name: Deploy android for dev
+
+on:
+  push:
+    branches:
+      - dev-release
+      - dev-release-android
+jobs:
+  deploy-android:
+    runs-on: ubuntu-latest
+    container: reactnativecommunity/react-native-android
+    steps:
+      - name: Checkout # clone the repository to local ci workspace
+        uses: actions/checkout@v2
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "::set-output name=dir::$(yarn cache dir)"
+
+      - uses: actions/cache@v2
+        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+      - name: Install Dependencies
+        # if: steps.yarn-cache.outputs.cache-hit != 'true'
+        run: yarn install --prefer-offline
+
+      - name: Set up JDK environment # set up environment for building android project
+        uses: actions/setup-java@v1.4.3
+        with:
+          java-version: 11
+          check-latest: true
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+
+      # - name: Copy dev google-services.json
+      #   id: write_dev_google_service_json
+      #   uses: timheuer/base64-to-file@v1.1
+      #   with:
+      #     fileName: 'google-services.json'
+      #     fileDir: 'android/app/'
+      #     encodedString: ${{ secrets.DEV_GOOGLE_SERVICE_JSON }}
+
+      # - name: Copy debug.keystore
+      #   id: write_keystore
+      #   uses: timheuer/base64-to-file@v1.1
+      #   with:
+      #     fileName: 'debug.keystore'
+      #     fileDir: 'android/app/'
+      #     encodedString: ${{ secrets.DEV_ANDROID_SIGNING_KEY }}
+
+      # - name: Copy env.json file
+      #   id: write_env_file
+      #   uses: timheuer/base64-to-file@v1.1
+      #   with:
+      #     fileName: 'env.json'
+      #     fileDir: './'
+      #     encodedString: ${{ secrets.DEV_ENV_FILE }}
+
+      ## configure cache for gradle to reduce the build time
+      - name: Cache Gradle Wrapper
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: Cache Gradle Dependencies
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-caches-
+      - name: Permission check
+        run: |
+          sudo chmod -R 777 android
+      - name: Bundle asset
+        run: |
+          sudo npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res/
+      - name: Remove duplicate resource
+        run: |
+          git config --global --add safe.directory /__w/react-native-github-actions/react-native-github-actions && git ls-files --others --exclude-standard | grep drawable | xargs rm
+      - name: Permission check
+        run: |
+          sudo chmod -R 777 /tmp
+      - name: Build Artifact
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease --no-daemon
+      - name: Upload artifact to BOX
+        working-directory: android
+        run: |
+          curl --location 'https://upload.app.box.com/api/2.0/files/content' \
+               --header 'Authorization: Bearer ${{ secrets.BOX_ACCESS_TOKEN }}' \
+               --form 'attributes="{\"name\":\"app-release.apk\", \"parent\":{\"id\":\"${{ secrets.BOX_IOS_DIRECTORY_ID }}\"}}"' \
+               --form 'file=@"app/build/outputs/apk/release/app-release.apk"'
+

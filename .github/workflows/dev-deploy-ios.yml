@@ -1,0 +1,90 @@
+name: Deploy iOS for dev
+
+on:
+  push:
+    branches:
+      - dev-release
+      - dev-release-ios
+jobs:
+  deploy-ios:
+    runs-on: macOS-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "::set-output name=dir::$(yarn cache dir)"
+
+      - uses: actions/cache@v2
+        id: yarn-cache
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Install Dependencies
+        # if: steps.yarn-cache.outputs.cache-hit != 'true'
+        run: yarn install --prefer-offline
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 2.7.5
+          bundler-cache: true
+
+      - name: Restore Pods Cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ios/Pods
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods
+      - name: Install Pods
+        run: cd ios && pod install --repo-update
+
+      # - name: Copy env.json file
+      #   id: write_env_file
+      #   uses: timheuer/base64-to-file@v1.1
+      #   with:
+      #     fileName: 'env.json'
+      #     fileDir: './'
+      #     encodedString: ${{ secrets.DEV_ENV_FILE }}
+
+      # - name: Copy GoogleService-info.plist
+      #   id: write_dev_google_service_info_plist
+      #   uses: timheuer/base64-to-file@v1.1
+      #   with:
+      #     fileName: 'GoogleService-Info.plist'
+      #     fileDir: 'ios/googleservices/dev/'
+      #     encodedString: ${{ secrets.DEV_GOOGLE_SERVICE_PLIST }}
+
+      - name: Run bundle assets
+        run: |
+          npx react-native bundle --entry-file index.js --platform ios --dev false --bundle-output ios/main.jsbundle --assets-dest ios
+      - name: Build Artifact
+        uses: yukiarrr/ios-build-action@v1.4.0
+        with:
+          project-path: ios/test.xcodeproj
+          p12-base64: ${{ secrets.DEV_IOS_P12_BASE64 }}
+          mobileprovision-base64: ${{ secrets.DEV_IOS_MOBILE_PROVISION_BASE64 }}
+          code-signing-identity: 'Apple Distribution'
+          team-id: ${{ secrets.DEV_IOS_TEAM_ID }}
+          certificate-password: ${{ secrets.DEV_IOS_CERTIFICATE_PASSWORD }}
+          workspace-path: ios/test.xcworkspace
+          scheme: test-Dev
+          export-method: "ad-hoc"
+          output-path: "ios/test.ipa"
+          update-targets: |
+            test-Dev
+      - name: Upload artifact to BOX
+        run: |
+          curl --location 'https://upload.app.box.com/api/2.0/files/content' \
+               --header 'Authorization: Bearer ${{ secrets.BOX_ACCESS_TOKEN }}' \
+               --form 'attributes="{\"name\":\"test.ipa\", \"parent\":{\"id\":\"${{ secrets.BOX_IOS_DIRECTORY_ID }}\"}}"' \
+               --form 'file=@"ios/test.ipa"'
